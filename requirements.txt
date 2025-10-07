@@ -1,0 +1,14 @@
+# PC 견적 추천 시스템 필수 라이브러리 (제공된 목록 기준)
+
+# 웹 애플리케이션 프레임워크
+streamlit==1.50.0
+
+# AI/ML 및 벡터 임베딩/검색
+openai==2.2.0
+sentence-transformers==5.1.1
+numpy==1.26.4
+pandas==2.3.2
+faiss-cpu==1.12.0
+
+# 웹 검색
+serpapi==0.1.5
