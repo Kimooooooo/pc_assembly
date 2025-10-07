@@ -83,7 +83,7 @@ def generate_quote(budget, purpose, notes, vector_db=None):
         parts_top20 = {}
         for category, keyword in keywords.items():
             parts_top20[category] = vector_db.search(
-                collection=category.lower(),
+                category=category.lower(),
                 query=keyword,
                 top_k=20
             )
@@ -137,7 +137,7 @@ def generate_quote(budget, purpose, notes, vector_db=None):
     # ===== 5단계: 최종 출력 =====
     print("\n[5단계] 최종 견적서 작성 중...")
     
-    messages = create_final_messages(compatible_combos[:3])  # 최대 3개만
+    messages = create_final_messages(compatible_combos[:3],budget)  # 최대 3개만
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages
@@ -193,7 +193,7 @@ def handle_followup(previous_quote, user_request, vector_db=None):
     if vector_db:
         new_parts = {
             changed_category: vector_db.search(
-                collection=changed_category.lower(),
+                category=changed_category.lower(),
                 query=user_request,
                 top_k=20
             )

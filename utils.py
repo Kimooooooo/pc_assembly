@@ -5,7 +5,7 @@
 """
 
 import re
-from serpapi import GoogleSearch
+from serpapi import Client
 import os
 import config
 
@@ -13,7 +13,7 @@ SERPAPI_KEY = 'key'
 
 def parse_keywords(llm_response):
     keywords = {}
-    categories = ["CPU", "GPU", "메인보드", "RAM", "파워", "케이스", "SSD","HDD", "쿨러"]
+    categories = ["CPU", "GPU", "MAINBORD", "RAM", "POWER", "CASE", "SSD","HDD", "COOLER"]
 
     for category in categories:
         pattern = rf'\[{category} 검색 키워드\]\s*\n(.+?)(?=\n\[|$)'
@@ -60,8 +60,8 @@ def web_search(query):
             'gl' : 'kr'
         }
         
-        search = GoogleSearch(params)
-        results = search.get_dict()
+        client = Client(params = params)
+        results = client.get_dict()
         
         snippets = []
         if 'organic_results' in results:

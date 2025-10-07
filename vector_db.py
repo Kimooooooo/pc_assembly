@@ -67,10 +67,10 @@ class VectorDB:
             'RAM': '가공데이터/ram.csv',
             'SSD': '가공데이터/ssd.csv',
             'HDD': '가공데이터/hdd.csv',
-            '메인보드': '가공데이터/mainbord.csv',
-            '케이스': '가공데이터/case.csv',
-            '파워': '가공데이터/power.csv',
-            '쿨러': '가공데이터/cooler.csv'
+            'MAINBORD': '가공데이터/mainbord.csv',
+            'CASE': '가공데이터/case.csv',
+            'POWER': '가공데이터/power.csv',
+            'COOLER': '가공데이터/cooler.csv'
         }
         
         for category, filename in csv_files.items():

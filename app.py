@@ -24,8 +24,11 @@ if 'vector_db' not in st.session_state:
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
-if 'current_quote' not in st.session_state:
-    st.session_state.current_quote = None
+if 'current_combos_text' not in st.session_state:
+    st.session_state.current_combos_text = None
+
+if 'selected_quote_text' not in st.session_state:
+    st.session_state.selected_quote_text = None
 
 
 # ===== 헤더 =====
@@ -96,23 +99,17 @@ if generate_btn:
     else:
         with st.spinner('🤖 AI가 최적의 부품 조합을 찾고 있습니다... (1~2분 소요)'):
             try:
-                quote = generate_quote(
+                quote_combos = generate_quote(
                     budget=budget,
                     purpose=purpose,
                     notes=notes,
                     vector_db=st.session_state.vector_db
                 )
                 
-                st.session_state.current_quote = quote
-                st.session_state.chat_history.append({
-                    'type': 'quote',
-                    'content': quote,
-                    'budget': budget,
-                    'purpose': purpose,
-                    'notes': notes
-                })
-                
-                st.success('✅ 견적 생성 완료!', icon="✅")
+                st.session_state.current_combos_text = quote_combos
+                st.session_state.selected_quote_text = None
+                st.session_state.chat_history = []
+                st.success('✅ 견적 생성 완료!', icon="✅") 
                 st.rerun()
             
             except Exception as e:
@@ -120,88 +117,144 @@ if generate_btn:
 
 
 # ===== 결과 표시 =====
-if st.session_state.current_quote:
+if st.session_state.current_combos_text:
     
-    # 탭 구성
-    tab1, tab2, tab3 = st.tabs(["💻 견적서", "💬 수정 요청", "📊 통계"])
+    # 탭 구성 변경: '견적서 및 수정'과 '통계' 탭으로 통합 (기존 '수정 요청' 탭 제거)
+    tab1, tab2 = st.tabs(["💻 견적서 및 수정", "📊 통계"])
     
     with tab1:
-        st.markdown("### 📋 추천 견적서")
-        st.markdown(st.session_state.current_quote)
         
-        # 다운로드 및 초기화 버튼
-        col_d1, col_d2 = st.columns([1, 1])
-        
-        with col_d1:
-            st.download_button(
-                label="📥 견적서 다운로드 (TXT)",
-                data=st.session_state.current_quote,
-                file_name=f"pc_quote_{budget}원_{purpose}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-        
-        with col_d2:
-            if st.button("🔄 새로운 견적 작성", use_container_width=True):
-                st.session_state.chat_history = []
-                st.session_state.current_quote = None
-                st.rerun()
-    
-    with tab2:
-        st.markdown("### 💬 견적 수정하기")
-        st.info("채팅으로 부품을 변경할 수 있습니다.", icon="💡")
-        
-        # 채팅 히스토리 표시
-        for msg in st.session_state.chat_history:
-            if msg['type'] == 'quote':
-                with st.chat_message("assistant", avatar="🤖"):
-                    st.markdown("✅ **초기 견적이 생성되었습니다.**")
+        # --- 견적 선택 화면: 아직 선택된 견적이 없을 때 ---
+        if st.session_state.selected_quote_text is None:
             
-            elif msg['type'] == 'user':
-                with st.chat_message("user", avatar="👤"):
-                    st.markdown(msg['content'])
+            st.markdown("### 📋 추천 견적 선택")
+            st.info("AI가 추천한 1, 2, 3순위 조합을 검토하신 후, 최종 견적을 선택해 주세요. (선택 후 수정 가능)", icon="💡")
             
-            elif msg['type'] == 'followup':
-                with st.chat_message("assistant", avatar="🤖"):
-                    st.markdown(msg['content'])
-        
-        # 사용자 입력
-        user_input = st.chat_input(
-            "예: CPU를 AMD로 바꿔줘 / GPU를 더 좋은 걸로 업그레이드해줘"
-        )
-        
-        if user_input:
-            # 사용자 메시지 추가
-            st.session_state.chat_history.append({
-                'type': 'user',
-                'content': user_input
-            })
+            # 1, 2, 3순위 조합 텍스트 모두 표시
+            st.markdown(st.session_state.current_combos_text)
             
-            with st.spinner('🔄 견적 수정 중...'):
-                try:
-                    new_quote = handle_followup(
-                        previous_quote=st.session_state.current_quote,
-                        user_request=user_input,
-                        vector_db=st.session_state.vector_db
-                    )
-                    
-                    st.session_state.current_quote = new_quote
-                    st.session_state.chat_history.append({
-                        'type': 'followup',
-                        'content': new_quote
-                    })
-                    
-                    st.rerun()
+            # 조합 텍스트를 구분자(━━━━━━━━━━━━━━━━━━━━)로 나눠서 리스트로 만듭니다.
+            # 1. 조합 구분자
+            separator = "━━━━━━━━━━━━━━━━━━━━"
+            # 2. 조합을 리스트로 분리
+            combos_list = st.session_state.current_combos_text.split(separator)
+            # 빈 문자열과 첫 번째 헤더를 제거하고, 실제 조합 텍스트만 남깁니다.
+            # 3. 실제 견적 텍스트만 추출 (index 1, 2, 3이 1, 2, 3순위 상세 내용이 되도록 가정)
+            parsed_quotes = [separator + combo.strip() for combo in combos_list if "📦 부품 구성:" in combo and "총 가격" in combo][:3]
+            
+            if len(parsed_quotes) > 0:
+                st.markdown("---")
+                st.subheader("🚀 최종 견적 선택")
+                col_s1, col_s2, col_s3 = st.columns(3)
                 
-                except Exception as e:
-                    st.error(f"❌ 오류 발생: {str(e)}", icon="❌")
+                # 선택 버튼 로직 (선택 시 해당 견적 텍스트를 selected_quote_text에 저장)
+                if col_s1.button("🥇 1순위 견적 선택", use_container_width=True, key="select_1"):
+                    st.session_state.selected_quote_text = parsed_quotes[0]
+                    st.session_state.chat_history.append({'type': 'quote', 'content': parsed_quotes[0]})
+                    st.rerun()
+
+                if len(parsed_quotes) > 1 and col_s2.button("🥈 2순위 견적 선택", use_container_width=True, key="select_2"):
+                    st.session_state.selected_quote_text = parsed_quotes[1]
+                    st.session_state.chat_history.append({'type': 'quote', 'content': parsed_quotes[1]})
+                    st.rerun()
+
+                if len(parsed_quotes) > 2 and col_s3.button("🥉 3순위 견적 선택", use_container_width=True, key="select_3"):
+                    st.session_state.selected_quote_text = parsed_quotes[2]
+                    st.session_state.chat_history.append({'type': 'quote', 'content': parsed_quotes[2]})
+                    st.rerun()
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔄 새로운 견적 처음부터 작성", use_container_width=True, key="reset_all"):
+                st.session_state.chat_history = []
+                st.session_state.current_combos_text = None
+                st.session_state.selected_quote_text = None
+                st.rerun()
+            
+        # --- 수정 모드 화면: 견적이 선택되었을 때 ---
+        else:
+            st.markdown("### ✅ **선택된 최종 견적**")
+            # 선택된 견적만 표시
+            st.markdown(st.session_state.selected_quote_text) 
+            
+            # 다운로드 및 초기화 버튼
+            col_d1, col_d2 = st.columns([1, 1])
+            
+            with col_d1:
+                st.download_button(
+                    label="📥 견적서 다운로드 (TXT)",
+                    data=st.session_state.selected_quote_text,
+                    file_name=f"pc_quote_selected.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            
+            with col_d2:
+                if st.button("🔄 새로운 견적 작성으로 돌아가기", use_container_width=True):
+                    st.session_state.chat_history = []
+                    st.session_state.current_combos_text = None
+                    st.session_state.selected_quote_text = None
+                    st.rerun()
+            
+            st.markdown("---")
+            
+            # 채팅/수정 기능 통합
+            st.markdown("### 💬 견적 수정하기")
+            st.info("채팅으로 부품을 변경할 수 있습니다. (예: 'CPU를 AMD로 바꿔줘')", icon="💡")
+            
+            # 채팅 히스토리 표시
+            for msg in st.session_state.chat_history:
+                if msg['type'] == 'quote':
+                    with st.chat_message("assistant", avatar="🤖"):
+                        st.markdown("✅ **선택/수정된 견적입니다.**")
+                
+                elif msg['type'] == 'user':
+                    with st.chat_message("user", avatar="👤"):
+                        st.markdown(msg['content'])
+                
+                elif msg['type'] == 'followup':
+                    with st.chat_message("assistant", avatar="🤖"):
+                        st.markdown(msg['content'])
+            
+            # 사용자 입력 (채팅창)
+            user_input = st.chat_input(
+                "예: CPU를 AMD로 바꿔줘 / GPU를 더 좋은 걸로 업그레이드해줘",
+                key="followup_input"
+            )
+            
+            if user_input:
+                # 사용자 메시지 추가
+                st.session_state.chat_history.append({
+                    'type': 'user',
+                    'content': user_input
+                })
+                
+                with st.spinner('🔄 견적 수정 중...'):
+                    try:
+                        # 선택된 견적을 이전 견적으로 사용
+                        new_quote = handle_followup(
+                            previous_quote=st.session_state.selected_quote_text,
+                            user_request=user_input,
+                            vector_db=st.session_state.vector_db
+                        )
+                        
+                        st.session_state.selected_quote_text = new_quote # 수정된 견적 업데이트
+                        st.session_state.chat_history.append({
+                            'type': 'followup',
+                            'content': new_quote
+                        })
+                        
+                        st.rerun()
+                    
+                    except Exception as e:
+                        st.error(f"❌ 오류 발생: {str(e)}", icon="❌")
     
-    with tab3:
+    # 통계 탭 (기존 'tab3'은 이제 'tab2'로 변경)
+    with tab2:
         st.markdown("### 📊 시스템 정보")
         
         # 벡터DB 통계
         stats = st.session_state.vector_db.get_stats()
-        
+        # ... (이하 기존 통계 출력 로직 유지)
         col_s1, col_s2, col_s3 = st.columns(3)
         
         with col_s1:
@@ -212,15 +265,17 @@ if st.session_state.current_quote:
         with col_s2:
             st.metric("SSD 데이터", f"{stats.get('SSD', 0):,}개")
             st.metric("HDD 데이터", f"{stats.get('HDD', 0):,}개")
-            st.metric("메인보드 데이터", f"{stats.get('메인보드', 0):,}개")
+            st.metric("메인보드 데이터", f"{stats.get('MAINBORD', 0):,}개")
         
         with col_s3:
-            st.metric("케이스 데이터", f"{stats.get('케이스', 0):,}개")
-            st.metric("파워 데이터", f"{stats.get('파워', 0):,}개")
-            st.metric("쿨러 데이터", f"{stats.get('쿨러', 0):,}개")
+            st.metric("케이스 데이터", f"{stats.get('CASE', 0):,}개")
+            st.metric("파워 데이터", f"{stats.get('POWER', 0):,}개")
+            st.metric("쿨러 데이터", f"{stats.get('COOLER', 0):,}개")
         
         total = sum(stats.values())
         st.success(f"**총 부품 데이터: {total:,}개**", icon="✅")
+
+
 
 else:
     # 초기 화면 (견적 없을 때)

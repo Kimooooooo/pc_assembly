@@ -52,9 +52,9 @@ def rule_based_check(combo):
         }, []
     
     cpu_info = parts.get('CPU')
-    mb_info = parts.get('메인보드')
+    mb_info = parts.get('MAINBORD')
     ram_info = parts.get('RAM')
-    case_info = parts.get('케이스')
+    case_info = parts.get('CASE')
     
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 1. CPU ↔ 메인보드 소켓/타입 체크 (제조사, 칩셋 기반)
@@ -183,7 +183,7 @@ def extract_parts_from_combo(combo):
         lines = str(combo).split('\n')
         for line in lines:
             if '▪️' in line or '-' in line:
-                for category in ['CPU', 'GPU', '메인보드', 'RAM', '파워', '케이스', 'SSD', 'HDD', '쿨러']:
+                for category in ['CPU', 'GPU', 'MAINBORD', 'RAM', 'POWER', 'CASE', 'SSD', 'HDD', 'COOLER']:
                     if category in line:
                         match = re.search(rf'{category}:\s*(.+?)\s*\(', line)
                         if match:

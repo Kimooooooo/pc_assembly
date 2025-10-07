@@ -13,3 +13,5 @@ __pycache__/
 4일_주제후보.txt
 
 *.ipynb/
+
+config.py
