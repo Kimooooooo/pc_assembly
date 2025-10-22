@@ -3,7 +3,7 @@
 """
 유틸리티 함수 모음
 """
-
+import requests
 import re
 from serpapi import Client
 import os
@@ -29,27 +29,36 @@ def parse_keywords(llm_response):
 
 
 def parse_unknown_items(llm_response):
-    """
-    LLM 응답에서 모르는 게임/프로그램 추출
+    unknown_items = []
     
-    Args:
-        llm_response: LLM의 텍스트 응답
-    
-    Returns:
-        ["GTA 6", "언리얼 엔진 5.4", ...]
-    """
-    pattern = r'\[모르는 항목\]\s*\n(.+?)(?=\n\[|$)'
-    match = re.search(pattern, llm_response, re.DOTALL)
+    # 1. [모르는 항목] 섹션의 내용 추출 (가장 유력한 섹션)
+    # 기존 프롬프트 구조에 맞춰 [모르는 항목]을 찾습니다.
+    pattern_old = r'\[모르는 항목\]\s*\n(.+?)(?=\n\[|$)'
+    match = re.search(pattern_old, llm_response, re.DOTALL)
     
     if match:
-        items = re.findall(r'- (.+?)(?:\(|$)', match.group(1))
-        return [item.strip() for item in items]
-    
-    return []
+        content = match.group(1)
+        # ✅ 정규 표현식: 각 줄에서 하이픈(-)과 공백을 무시하고 뒤따르는 모든 텍스트를 추출
+        # (이로써 '-GTA 6', '-GTA 6 - 설명' 형태 모두 대응 가능)
+        items = re.findall(r'-\s*(.+)', content)
+        
+        for item in items:
+            # 추출된 항목에서 ' - ' 이후의 설명 부분은 제거하고, 프로그램 이름만 추출
+            name = item.strip().split(' - ')[0].strip()
+            
+            # 항목이 비어있지 않고, '없음' 같은 키워드가 아니라면 추가
+            if name and name.lower() != '없음':
+                unknown_items.append(name)
+                
+    # 2. [웹 검색 필요 항목] 섹션이 있다면 해당 섹션에서도 항목 추출 (새로운 프롬프트 지원)
+    # (새 프롬프트 구조를 사용했다면 이 섹션을 우선적으로 파싱하도록 로직을 추가할 수 있습니다.)
+    # (여기서는 기존 [모르는 항목] 섹션만 확실히 수정하여 당면한 오류를 해결합니다.)
+
+    return unknown_items
 
 num_results = 3
 def web_search(query):
-    try:
+    try:    
         params = {
             'q': query,
             'api_key': SERPAPI_KEY,
@@ -60,8 +69,8 @@ def web_search(query):
             'gl' : 'kr'
         }
         
-        client = Client(params = params)
-        results = client.get_dict()
+        client = Client()
+        results = client.search(params)
         
         snippets = []
         if 'organic_results' in results:

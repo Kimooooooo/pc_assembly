@@ -9,18 +9,7 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 
 def generate_quote(budget, purpose, notes, vector_db=None):
-    """
-    전체 견적 생성 프로세스
-    
-    Args:
-        budget: 예산 (원)
-        purpose: 목적 (게이밍, 사무용 등)
-        notes: 참고사항
-        vector_db: 벡터DB 객체 (None이면 더미 데이터 사용)
-    
-    Returns:
-        최종 견적 텍스트
-    """
+  
     
     print("\n" + "="*70)
     print("PC 견적 생성 시작")
@@ -41,11 +30,12 @@ def generate_quote(budget, purpose, notes, vector_db=None):
     
     # 0-B: 모르는 항목 추출
     unknown_items = parse_unknown_items(recognition_result)
+    print(f'추출된 모르는 항목 :  {unknown_items}')
     
     # 0-C: 검색 필요 시 웹 검색
     search_results = ""
     if unknown_items:
-        print(f"\n⚠️ 다음 항목의 정보를 웹에서 검색합니다: {unknown_items}")
+        print(f"\n다음 항목의 정보를 웹에서 검색합니다: {unknown_items}")
         
         search_dict = {}
         for item in unknown_items:
@@ -120,16 +110,22 @@ def generate_quote(budget, purpose, notes, vector_db=None):
     
     compatible_combos = []
     for i, combo in enumerate(combos, 1):
-        print(f"  조합 {i} 체크 중...")
+        print(f"\n  조합 {i} 체크 중...")
+        print(f"  조합 내용 (처음 200자): {combo[:200]}...")
+        
         compat_result = check_compatibility(combo, client)
+        
+        print(f"  호환성 결과: {compat_result['호환됨']}")
+        print(f"  문제점: {compat_result.get('문제점', [])}")
+        print(f"  경고사항: {compat_result.get('경고사항', [])}")
         
         if compat_result['호환됨']:
             compatible_combos.append(combo)
             print(f"    ✅ 호환됨")
         else:
-            print(f"    ❌ 호환 안됨: {compat_result.get('문제점', [])}")
+            print(f"    ❌ 호환 안됨")
     
-    print(f"호환성 체크 완료: {len(compatible_combos)}개 조합이 호환됨")
+    print(f"\n호환성 체크 완료: {len(compatible_combos)}개 조합이 호환됨")
     
     if len(compatible_combos) == 0:
         return "⚠️ 호환되는 조합을 찾을 수 없습니다. 예산을 조정하거나 요구사항을 완화해주세요."
@@ -137,7 +133,7 @@ def generate_quote(budget, purpose, notes, vector_db=None):
     # ===== 5단계: 최종 출력 =====
     print("\n[5단계] 최종 견적서 작성 중...")
     
-    messages = create_final_messages(compatible_combos[:3],budget)  # 최대 3개만
+    messages = create_final_messages(compatible_combos[:3],budget)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages
@@ -238,14 +234,20 @@ def handle_followup(previous_quote, user_request, vector_db=None):
 # ===== 헬퍼 함수 =====
 
 def extract_combos(combos_text):
-    """조합 텍스트에서 개별 조합 추출"""
+    """
+    조합 텍스트에서 개별 조합 추출
+    
+    Returns:
+        조합 문자열 리스트 (compatibility.py가 파싱함)
+    """
     combos = []
     
     # "━━━━━━" 로 구분
     parts = combos_text.split("━━━━━━━━━━━━━━━━━━━━")
     
     for part in parts:
-        if "조합" in part and "▪️" in part:
+        # "조합"이라는 단어와 부품 정보(▪️)가 있으면 유효한 조합
+        if ("조합" in part or "순위" in part) and "▪️" in part:
             combos.append(part.strip())
     
     return combos
@@ -261,25 +263,4 @@ def extract_changed_category(change_analysis):
 
 
 
-# ===== 메인 실행 =====
-
-if __name__ == "__main__":
-    # 테스트 실행
-    
-    print("="*70)
-    print("PC 견적 추천 시스템 테스트")
-    print("="*70)
-    
-    # 초기 견적 생성
-    quote = generate_quote(
-        budget=1000000,
-        purpose="게이밍",
-        notes="오버워치 최고옵션, 화이트 케이스"
-    )
-    
-    print("\n\n" + "="*70)
-    print("최종 견적")
-    print("="*70)
-    print(quote)
-    
    

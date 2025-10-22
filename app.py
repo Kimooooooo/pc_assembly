@@ -183,7 +183,7 @@ if st.session_state.current_combos_text:
                 st.download_button(
                     label="📥 견적서 다운로드 (TXT)",
                     data=st.session_state.selected_quote_text,
-                    file_name=f"pc_quote_selected.txt",
+                    file_name=f"pc_견적서_selected.txt",
                     mime="text/plain",
                     use_container_width=True
                 )

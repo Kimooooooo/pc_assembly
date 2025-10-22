@@ -164,37 +164,3 @@ def get_power_message(is_sufficient, margin):
         return "✓ 파워 충분"
 
 
-if __name__ == "__main__":
-    
-    # 테스트 조합 (GPU 450W, CPU 162W 가정)
-    test_combo = {
-        "CPU": {
-            "제품명": "AMD 라이젠7 7800X3D",
-            "가격": 453000,
-            "상세정보": {"PPT": "162W"}
-        },
-        "GPU": {
-            "제품명": "GIGABYTE 지포스 RTX 4090",
-            "권장파워": "정격파워 1000W 이상",
-            "가격": 2500000,
-            "상세정보": {"사용전력": "450W"}
-        },
-        "파워": {
-            "제품명": "마이크로닉스 850W",
-            "가격": 79000,
-        }
-    }
-    
-    print("="*50)
-    print("전력 호환성 체크 (개선 버전)")
-    print("="*50)
-    
-    result = check_power_compatibility(test_combo)
-    
-    print(f"\n결과:")
-    print(f"  총 소비: {result['총소비']}W")
-    print(f"  파워 용량: {result['파워용량']}W")
-    print(f"  안전 용량: {result['안전용량']}W (80% 기준)")
-    print(f"  여유율: {result['여유율']}%")
-    print(f"  {result['메시지']}")
-    print(f"  충분함: {result['충분함']}")
