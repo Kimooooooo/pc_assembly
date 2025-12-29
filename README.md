@@ -23,7 +23,7 @@ PC 견적 추천 시스템 (RAG & Rule-based)
 1. 데이터 검색 로직 (vector_db.py)
 단순한 텍스트 검색은 오타나 유사 명칭을 찾지 못해 벡터 검색(RAG)을 도입했습니다. 한국어 제품명 인식률이 좋은 Snowflake 모델을 사용했습니다.
 
-Python
+
 
 # 검색 속도를 위해 FAISS 인덱싱을 활용했고, 매번 임베딩하는 시간을 아끼려 캐시 기능을 넣었습니다.
 ```
@@ -39,7 +39,7 @@ def search(self, category, query, top_k=20):
 2. 소켓 및 규격 검증 (compatibility.py)
 LLM이 가장 자주 틀리는 부분이 AM4와 AM5 소켓을 섞거나 DDR4와 DDR5를 혼용하는 것이었습니다. 이를 해결하기 위해 직접 정규표현식으로 제품명을 분석하는 로직을 짰습니다.
 
-Python
+
 
 # CPU와 메인보드의 소켓이 물리적으로 맞는지 체크하는 핵심 로직입니다.
 ```
@@ -51,7 +51,7 @@ if any(x in cpu_name for x in ['7500','7600','7800']):
 3. 전력 계산 엔진 (power_calculator.py)
 조립 PC에서 파워 용량이 부족하면 시스템이 멈춥니다. 이를 방지하기 위해 각 부품의 TDP(소비전력)를 합산해 파워 용량과 비교합니다.
 
-Python
+
 ```
 def calculate_total_power(combo):
     total = 0
