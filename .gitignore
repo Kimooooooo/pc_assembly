@@ -1,0 +1,17 @@
+vector_db_cache/
+
+.venv/
+venv/
+env
+
+가공데이터/
+원시데이터/
+
+__pycache__/
+
+워크플로우.txt
+4일_주제후보.txt
+
+*.ipynb/
+
+config.py
