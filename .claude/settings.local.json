@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python _fix_app.py)",
+      "Bash(python -c ' *)",
+      "Bash(pip install *)"
+    ]
+  }
+}
