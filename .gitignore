@@ -1,0 +1,30 @@
+# 환경변수 — 절대 커밋 금지 (API 키, DB 비밀번호 포함)
+.env
+# .env.example 은 커밋 허용 (키 없는 템플릿)
+!.env.example
+
+vector_db_cache/
+
+# ChromaDB — 바이너리 인덱스는 PC마다 재구축 필요, 커밋 불필요
+# chroma.sqlite3(메타데이터)도 재구축 시 자동 생성되므로 전체 제외
+chroma_db/
+
+.venv/
+venv/
+env
+
+가공데이터/
+원시데이터/
+
+__pycache__/
+
+워크플로우.txt
+4일_주제후보.txt
+
+*.ipynb/
+
+# md 파일 — 내부 작업 문서는 제외, GitHub용 README는 허용
+*.md
+!README.md
+
+*.txt
