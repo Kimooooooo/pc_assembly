@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PC 견적 추천 시스템</title>
+
+  <!-- 나눔고딕 폰트 -->
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+  <!-- SweetAlert2 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { nanum: ['"Nanum Gothic"', 'sans-serif'] },
+          colors: {
+            brand: { DEFAULT: '#3b82f6', hover: '#2563eb', light: '#eff6ff' },
+            navy: '#0f172a',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * { font-family: 'Nanum Gothic', sans-serif; }
+
+    /* 스크롤바 */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+    .dark ::-webkit-scrollbar-track { background: #1e2635; }
+    .dark ::-webkit-scrollbar-thumb { background: #444; }
+
+    /* 로딩 점 애니메이션 */
+    .dot-anim span { display:inline-block; animation: dotBounce 1.2s infinite both; }
+    .dot-anim span:nth-child(2) { animation-delay:.2s; }
+    .dot-anim span:nth-child(3) { animation-delay:.4s; }
+    @keyframes dotBounce {
+      0%,80%,100%{ transform:scale(0); opacity:.3 }
+      40%{ transform:scale(1); opacity:1 }
+    }
+
+    /* 견적 카드 hover */
+    .part-card { transition: box-shadow .2s, transform .2s; }
+    .part-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(232,68,10,.13); }
+
+    /* 탭 활성화 */
+    .tab-btn.active { border-bottom: 3px solid #3b82f6; color: #3b82f6; font-weight: 800; }
+
+    /* 입력 포커스 */
+    input:focus, textarea:focus, select:focus { outline: none; border-color: #3b82f6 !important; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
+    .part-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(59,130,246,.15); }
+
+    /* 다크모드 전환 트랜지션 */
+    html { transition: background .3s, color .3s; }
+
+    /* 결과 영역 fade-in */
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(20px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    .fade-up { animation: fadeUp .5s ease forwards; }
+
+    /* 가격 강조 */
+    .price-tag { letter-spacing: -0.5px; }
+
+    /* 실시간 견적 ticker */
+    @keyframes tickerScroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .ticker-inner { animation: tickerScroll 30s linear infinite; white-space:nowrap; }
+    .ticker-inner:hover { animation-play-state:paused; }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen transition-colors duration-300">
+
+<!-- ========== 헤더 ========== -->
+<header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
+  <div class="max-w-6xl mx-auto px-3 sm:px-6">
+    <div class="flex items-center justify-between py-3">
+      <div class="flex items-center gap-2">
+        <div class="bg-brand text-white font-black text-sm px-2 py-1 rounded select-none">PC견적</div>
+        <span class="font-black text-lg text-white tracking-tight">AI 견적 추천 시스템</span>
+      </div>
+      <span class="text-xs text-slate-400">Powered by OpenAI + LangGraph</span>
+    </div>
+  </div>
+</header>
+
+<!-- ========== 메인 ========== -->
+<main class="max-w-6xl mx-auto px-3 sm:px-6 py-6">
+
+  <!-- 입력 카드 -->
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-5 sm:p-7 mb-6">
+    <h2 class="text-base font-black text-white mb-4 flex items-center gap-2">
+      <span class="bg-brand text-white text-xs px-2 py-0.5 rounded font-bold">STEP 1</span>
+      견적 조건 입력
+    </h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <!-- 예산 -->
+      <div>
+        <label class="block text-xs font-bold text-slate-400 mb-1">💰 예산 (원)</label>
+        <div class="relative">
+          <!-- type=text 로 변경: 세 자릿수 콤마 포맷 표시 -->
+          <input id="budgetDisplay" type="text" placeholder="예) 1,500,000"
+            oninput="onBudgetInput(this)"
+            class="w-full border border-slate-700 rounded-lg px-4 py-3 text-sm bg-slate-800 text-white pr-14 transition-colors" />
+          <!-- 실제 숫자값 저장용 (API 전송 시 사용) -->
+          <input id="budgetRaw" type="hidden" value="0" />
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold">원</span>
+        </div>
+        <!-- 빠른 선택 버튼 -->
+        <div class="flex flex-wrap gap-1.5 mt-2">
+          <button onclick="setBudget(700000)"  class="quick-budget text-xs px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-brand hover:text-brand transition-colors">70만</button>
+          <button onclick="setBudget(1000000)" class="quick-budget text-xs px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-brand hover:text-brand transition-colors">100만</button>
+          <button onclick="setBudget(1500000)" class="quick-budget text-xs px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-brand hover:text-brand transition-colors">150만</button>
+          <button onclick="setBudget(2000000)" class="quick-budget text-xs px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-brand hover:text-brand transition-colors">200만</button>
+          <button onclick="setBudget(3000000)" class="quick-budget text-xs px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-brand hover:text-brand transition-colors">300만</button>
+          <button onclick="setBudget(5000000)" class="quick-budget text-xs px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-brand hover:text-brand transition-colors">500만+</button>
+        </div>
+      </div>
+
+      <!-- 용도 -->
+      <div>
+        <label class="block text-xs font-bold text-slate-400 mb-1">🎯 주요 용도</label>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="use-option flex items-center gap-2 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer hover:border-brand transition-colors">
+            <input type="radio" name="useType" value="gaming" class="accent-brand" /> <span class="text-sm">🎮 게임</span>
+          </label>
+          <label class="use-option flex items-center gap-2 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer hover:border-brand transition-colors">
+            <input type="radio" name="useType" value="office" class="accent-brand" /> <span class="text-sm">💼 사무/문서</span>
+          </label>
+          <label class="use-option flex items-center gap-2 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer hover:border-brand transition-colors">
+            <input type="radio" name="useType" value="video" class="accent-brand" /> <span class="text-sm">🎬 영상편집</span>
+          </label>
+          <label class="use-option flex items-center gap-2 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer hover:border-brand transition-colors">
+            <input type="radio" name="useType" value="ai" class="accent-brand" /> <span class="text-sm">🤖 AI/딥러닝</span>
+          </label>
+          <label class="use-option flex items-center gap-2 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer hover:border-brand transition-colors">
+            <input type="radio" name="useType" value="design" class="accent-brand" /> <span class="text-sm">🎨 그래픽/디자인</span>
+          </label>
+          <label class="use-option flex items-center gap-2 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer hover:border-brand transition-colors">
+            <input type="radio" name="useType" value="general" class="accent-brand" checked /> <span class="text-sm">🖥️ 일반/복합</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 참고사항 -->
+    <div class="mt-4">
+      <label class="block text-xs font-bold text-slate-400 mb-1">📝 참고사항 (선택)</label>
+      <textarea id="noteInput" rows="3"
+        placeholder="예: 케이스는 하얀색으로 해줘, SSD는 1TB 이상, 조용한 쿨러 원해요, 오버클럭 가능하면 좋겠어요..."
+        class="w-full border border-slate-700 rounded-lg px-4 py-3 text-sm bg-slate-800 text-white resize-none transition-colors placeholder-slate-500"></textarea>
+    </div>
+
+    <!-- 견적 생성 버튼 -->
+    <button id="generateBtn" onclick="generateEstimate()"
+      class="mt-5 w-full bg-brand hover:bg-brand-hover text-white font-black text-base py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-brand/40 hover:shadow-xl flex items-center justify-center gap-2 group">
+      <svg class="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+      </svg>
+      AI 견적 생성하기
+    </button>
+  </div>
+
+  <!-- ========== 결과 영역 (초기 숨김) ========== -->
+  <div id="resultSection" class="hidden fade-up">
+
+    <!-- 3종 견적 선택 버튼 -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl px-4 sm:px-6 py-4 mb-3">
+      <p class="text-xs font-bold text-slate-400 mb-3">AI가 생성한 3가지 견적 유형 중 선택하세요</p>
+      <div class="grid grid-cols-3 gap-2" id="quoteTypeBtns">
+        <button onclick="selectQuote(0)"
+          class="quote-type-btn active-qt border-2 border-brand bg-brand/5 text-brand font-black py-3 px-2 rounded-xl text-sm transition-all">
+          💚 가성비형
+        </button>
+        <button onclick="selectQuote(1)"
+          class="quote-type-btn border-2 border-gray-200 dark:border-gray-600 text-slate-400 text-slate-300 font-bold py-3 px-2 rounded-xl text-sm transition-all hover:border-brand hover:text-brand">
+          ⚖️ 밸런스형
+        </button>
+        <button onclick="selectQuote(2)"
+          class="quote-type-btn border-2 border-gray-200 dark:border-gray-600 text-slate-400 text-slate-300 font-bold py-3 px-2 rounded-xl text-sm transition-all hover:border-brand hover:text-brand">
+          🏆 최고스펙형
+        </button>
+      </div>
+      <p id="quoteDesc" class="text-xs text-slate-400 mt-2 text-center"></p>
+    </div>
+
+    <!-- 탭 -->
+    <div class="bg-slate-900 border border-slate-800 rounded-t-2xl shadow-xl px-4 sm:px-6 pt-4 border-b border-slate-800">
+      <div class="flex gap-1 overflow-x-auto">
+        <button class="tab-btn active text-sm px-4 py-2 whitespace-nowrap transition-colors" onclick="switchTab('parts', this)">🔩 부품 목록</button>
+        <button class="tab-btn text-sm px-4 py-2 whitespace-nowrap text-slate-400 transition-colors" onclick="switchTab('chart', this)">📊 예산 분배</button>
+        <button class="tab-btn text-sm px-4 py-2 whitespace-nowrap text-slate-400 transition-colors" onclick="switchTab('summary', this)">📋 견적 요약</button>
+      </div>
+    </div>
+
+    <!-- 탭 콘텐츠 -->
+    <div class="bg-slate-900 border border-slate-800 rounded-b-2xl px-4 sm:px-6 pb-6">
+
+      <!-- 부품 목록 탭 -->
+      <div id="tab-parts" class="pt-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-black text-sm text-white dark:text-white">추천 부품 구성</h3>
+          <div id="totalPriceBox" class="text-right">
+            <div class="text-xs text-slate-400">총 견적금액</div>
+            <div id="totalPriceVal" class="price-tag text-xl font-black text-brand">0원</div>
+          </div>
+        </div>
+        <div id="partsList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+
+        <!-- 액션 버튼 -->
+        <div class="flex flex-col sm:flex-row gap-3 mt-6">
+          <button onclick="copyEstimate()" class="flex-1 border-2 border-brand text-brand font-bold py-3 rounded-xl hover:bg-brand-light transition-colors text-sm">
+            📋 견적 복사하기
+          </button>
+          <button onclick="generateEstimate()" class="flex-1 bg-brand text-white font-bold py-3 rounded-xl hover:bg-brand-hover transition-colors text-sm">
+            🔄 다시 생성
+          </button>
+        </div>
+      </div>
+
+      <!-- 차트 탭 -->
+      <div id="tab-chart" class="pt-5 hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+          <div><canvas id="budgetChart" height="280"></canvas></div>
+          <div id="chartLegend" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- 요약 탭 -->
+      <div id="tab-summary" class="pt-5 hidden">
+        <div id="summaryContent" class="space-y-3 text-sm"></div>
+      </div>
+    </div>
+
+  </div><!-- /resultSection -->
+
+  <!-- 로딩 오버레이 -->
+  <div id="loadingOverlay" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div class="bg-white bg-slate-900 rounded-2xl p-8 shadow-2xl text-center w-72">
+      <div class="w-16 h-16 mx-auto mb-4 relative">
+        <div class="absolute inset-0 rounded-full border-4 border-brand/20"></div>
+        <div class="absolute inset-0 rounded-full border-4 border-brand border-t-transparent animate-spin"></div>
+        <div class="absolute inset-0 flex items-center justify-center text-2xl">🖥️</div>
+      </div>
+      <p class="font-black text-base text-white dark:text-white mb-1">AI가 견적을 분석 중입니다</p>
+      <p id="loadingMsg" class="text-xs text-slate-400 mb-3">최적의 부품을 선정하는 중...</p>
+      <div class="dot-anim flex justify-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-brand inline-block"></span>
+        <span class="w-2 h-2 rounded-full bg-brand inline-block"></span>
+        <span class="w-2 h-2 rounded-full bg-brand inline-block"></span>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ========== 푸터 ========== -->
+<footer class="bg-white bg-slate-900 border-t border-slate-800 mt-10 py-6 text-center text-xs text-slate-400">
+  PC 견적 AI 추천 시스템 &nbsp;|&nbsp; 가격은 시세에 따라 변동될 수 있습니다 &nbsp;|&nbsp; © 2025
+</footer>
+
+<!-- ========== JS ========== -->
+<script>
+// ── 부품 카테고리 메타 정보 ────────────────────────────
+const PART_CONFIG = {
+  "CPU":    { icon:"⚡", label:"CPU (프로세서)"  },
+  "GPU":    { icon:"🎮", label:"GPU (그래픽카드)" },
+  "RAM":    { icon:"💾", label:"RAM (메모리)"    },
+  "SSD":    { icon:"💿", label:"SSD (저장장치)"  },
+  "HDD":    { icon:"📀", label:"HDD (저장장치)"  },
+  "메인보드": { icon:"🔌", label:"메인보드"        },
+  "파워":   { icon:"🔋", label:"파워서플라이"     },
+  "케이스":  { icon:"🖥️", label:"케이스"          },
+  "쿨러":   { icon:"❄️", label:"CPU 쿨러"        },
+};
+
+// ── 상태 ─────────────────────────────────────────────
+let allQuotes = [];        // API 응답 quotes 배열
+let selectedQuoteIdx = 0;  // 현재 선택된 견적 인덱스
+let budgetChartInstance = null;
+let lastBudget = 0, lastUseType = 'general', lastNote = '';
+
+// ── 다크모드 ──────────────────────────────────────────
+// ── 예산 입력: 콤마 포맷 처리 ────────────────────────
+function onBudgetInput(el) {
+  // 숫자만 추출
+  const raw = el.value.replace(/[^0-9]/g, '');
+  document.getElementById('budgetRaw').value = raw || '0';
+  // 콤마 포맷으로 표시
+  el.value = raw ? parseInt(raw).toLocaleString('ko-KR') : '';
+}
+
+function setBudget(v) {
+  document.getElementById('budgetDisplay').value = v.toLocaleString('ko-KR');
+  document.getElementById('budgetRaw').value = String(v);
+}
+
+// ── 로딩 ─────────────────────────────────────────────
+const LOADING_MSGS = [
+  'AI가 요구사항을 분석하는 중...',
+  'ChromaDB에서 부품을 검색하는 중...',
+  '최적 견적 조합을 생성하는 중...',
+  '호환성을 검증하는 중...',
+  '최종 3종 견적을 정리하는 중...',
+];
+let loadMsgIdx = 0, loadInterval = null;
+
+function startLoading() {
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+  loadMsgIdx = 0;
+  document.getElementById('loadingMsg').textContent = LOADING_MSGS[0];
+  loadInterval = setInterval(() => {
+    loadMsgIdx = (loadMsgIdx + 1) % LOADING_MSGS.length;
+    document.getElementById('loadingMsg').textContent = LOADING_MSGS[loadMsgIdx];
+  }, 3000);
+}
+
+function stopLoading() {
+  clearInterval(loadInterval);
+  document.getElementById('loadingOverlay').classList.add('hidden');
+}
+
+// ── 가격 파싱 ─────────────────────────────────────────
+// API가 "850,000원" 문자열로 줄 수도 있고 숫자로 줄 수도 있음
+function parsePrice(v) {
+  if (typeof v === 'number') return v;
+  return parseInt(String(v).replace(/[,원\s]/g, '')) || 0;
+}
+
+// ── 견적 생성 메인 함수 ───────────────────────────────
+async function generateEstimate() {
+  const budget  = parseInt(document.getElementById('budgetRaw').value || '0');
+  const useType = document.querySelector('input[name="useType"]:checked')?.value || 'general';
+  const note    = document.getElementById('noteInput').value.trim();
+
+  if (!budget || budget < 300000) {
+    Swal.fire({ icon:'warning', title:'예산을 확인해주세요',
+      text:'최소 30만원 이상의 예산을 입력해주세요.', confirmButtonColor:'#e8440a' });
+    return;
+  }
+
+  lastBudget = budget; lastUseType = useType; lastNote = note;
+  startLoading();
+
+  try {
+    // 실제 Django API 호출 (/api/quote/)
+    const res = await fetch('/api/quote/', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ budget, purpose: useType, notes: note }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `서버 오류 (${res.status})`);
+    }
+
+    const data = await res.json();
+    allQuotes = data.quotes || [];
+
+    if (allQuotes.length === 0) {
+      throw new Error('견적을 생성하지 못했습니다. 예산을 높이거나 다시 시도해주세요.');
+    }
+
+    selectedQuoteIdx = 0;
+    renderAllQuotes(budget, useType, note);
+
+  } catch (e) {
+    stopLoading();
+    Swal.fire({
+      icon: 'error',
+      title: '오류 발생',
+      html: e.message,
+      confirmButtonColor: '#3b82f6',
+    });
+  }
+}
+
+// ── 전체 결과 렌더링 ──────────────────────────────────
+function renderAllQuotes(budget, useType, note) {
+  stopLoading();
+
+  // 견적 유형 버튼 업데이트
+  const typeLabels = ['💚 가성비형', '⚖️ 밸런스형', '🏆 최고스펙형'];
+  const btns = document.querySelectorAll('.quote-type-btn');
+  btns.forEach((btn, i) => {
+    const q = allQuotes[i];
+    if (q) {
+      btn.textContent = typeLabels[i];
+      btn.disabled = false;
+    } else {
+      btn.textContent = typeLabels[i] + ' (없음)';
+      btn.disabled = true;
+    }
+  });
+
+  const section = document.getElementById('resultSection');
+  section.classList.remove('hidden');
+  section.scrollIntoView({ behavior:'smooth', block:'start' });
+
+  renderQuote(selectedQuoteIdx, budget, useType, note);
+
+  const useNames = { gaming:'🎮 게임', office:'💼 사무', video:'🎬 영상편집',
+                     ai:'🤖 AI/딥러닝', design:'🎨 디자인', general:'🖥️ 일반' };
+  Swal.fire({
+    icon:'success', title:'견적 생성 완료!',
+    html: `<b>${useNames[useType]}</b> 용도 3종 견적이 완성됐어요!`,
+    confirmButtonColor:'#e8440a', timer:2000, timerProgressBar:true, showConfirmButton:false,
+  });
+}
+
+// ── 특정 견적 선택 및 렌더링 ──────────────────────────
+function selectQuote(idx) {
+  if (!allQuotes[idx]) return;
+  selectedQuoteIdx = idx;
+  // 버튼 스타일 교체
+  document.querySelectorAll('.quote-type-btn').forEach((btn, i) => {
+    if (i === idx) {
+      btn.classList.add('active-qt','border-brand','bg-brand/5','text-brand','font-black');
+      btn.classList.remove('border-gray-200','dark:border-gray-600','text-slate-400','text-slate-300','font-bold');
+    } else {
+      btn.classList.remove('active-qt','border-brand','bg-brand/5','text-brand','font-black');
+      btn.classList.add('border-gray-200','dark:border-gray-600','text-slate-400','text-slate-300','font-bold');
+    }
+  });
+  renderQuote(idx, lastBudget, lastUseType, lastNote);
+}
+
+function renderQuote(idx, budget, useType, note) {
+  const quote = allQuotes[idx];
+  if (!quote) return;
+
+  // 견적 설명 업데이트
+  document.getElementById('quoteDesc').textContent = quote.description || '';
+
+  // 부품 목록 렌더링
+  const list = document.getElementById('partsList');
+  list.innerHTML = '';
+  let total = parsePrice(quote.total_price) || 0;
+
+  // total_price가 없으면 직접 합산
+  let calcTotal = 0;
+  Object.entries(PART_CONFIG).forEach(([cat, meta]) => {
+    const part = quote[cat];
+    if (!part || !part.name) return;
+    const price = parsePrice(part.price);
+    calcTotal += price;
+    const imgSrc = part.image_url || '';
+    list.innerHTML += `
+      <div class="part-card border border-slate-700 rounded-xl p-3 bg-slate-800 hover:border-brand transition-all">
+        <div class="flex items-center gap-3">
+          <div class="w-16 h-16 shrink-0 bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden">
+            ${imgSrc
+              ? `<img src="${imgSrc}" alt="" class="w-full h-full object-contain"
+                      onerror="this.parentElement.innerHTML='<span style=font-size:1.5rem>${meta.icon}</span>'" />`
+              : `<span style="font-size:1.5rem">${meta.icon}</span>`}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-bold text-slate-400 mb-0.5">${meta.label}</div>
+            <div class="font-bold text-sm text-white truncate" title="${part.name}">${part.name}</div>
+            <div class="price-tag font-black text-sm text-brand mt-1">${price ? price.toLocaleString()+'원' : part.price}</div>
+          </div>
+        </div>
+      </div>`;
+  });
+  // total_price는 서버에서 계산된 값 사용 (LLM 오류 방지)
+  total = parsePrice(quote.total_price) || calcTotal;
+
+  document.getElementById('totalPriceVal').textContent = total.toLocaleString() + '원';
+
+  // 차트용 데이터 변환
+  const chartParts = Object.entries(PART_CONFIG)
+    .filter(([cat]) => quote[cat]?.name)
+    .map(([cat, meta]) => ({
+      label: meta.label, icon: meta.icon,
+      price: parsePrice(quote[cat].price),
+    }));
+  renderChart(chartParts);
+
+  // 요약
+  const useNames = { gaming:'🎮 게임', office:'💼 사무', video:'🎬 영상편집',
+                     ai:'🤖 AI/딥러닝', design:'🎨 디자인', general:'🖥️ 일반' };
+  const diff = budget - total;
+  const warnings = (quote.compat_warnings || []).map(w =>
+    `<div class="text-xs text-yellow-600 dark:text-yellow-400">⚠️ ${w}</div>`).join('');
+
+  // LLM 선정 이유 (reason 배열 → 번호 목록)
+  const reasons = Array.isArray(quote.reason) ? quote.reason : [];
+  const reasonHtml = reasons.length > 0
+    ? `<div class="bg-slate-800 border border-brand/30 rounded-xl p-4 mt-2">
+        <div class="text-xs font-bold text-brand mb-3">🤖 AI 견적 선정 이유</div>
+        <ol class="space-y-2">
+          ${reasons.map((r, i) => `
+            <li class="flex gap-2 text-sm text-slate-200">
+              <span class="shrink-0 w-5 h-5 rounded-full bg-brand/20 text-brand text-xs flex items-center justify-center font-bold">${i+1}</span>
+              <span>${r}</span>
+            </li>`).join('')}
+        </ol>
+      </div>`
+    : '';
+
+  document.getElementById('summaryContent').innerHTML = `
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div class="bg-slate-800 rounded-xl p-4 text-center">
+        <div class="text-xs text-slate-400 mb-1">설정 예산</div>
+        <div class="font-black text-brand">${budget.toLocaleString()}원</div>
+      </div>
+      <div class="bg-slate-800 rounded-xl p-4 text-center">
+        <div class="text-xs text-slate-400 mb-1">총 견적금액</div>
+        <div class="font-black text-white">${total.toLocaleString()}원</div>
+      </div>
+      <div class="bg-slate-800 rounded-xl p-4 text-center col-span-2 sm:col-span-1">
+        <div class="text-xs text-slate-400 mb-1">잔여 예산</div>
+        <div class="font-black ${diff >= 0 ? 'text-green-500' : 'text-red-500'}">${diff >= 0 ? '+' : ''}${diff.toLocaleString()}원</div>
+      </div>
+    </div>
+    ${reasonHtml}
+    <div class="bg-slate-800 rounded-xl p-4 mt-2">
+      <div class="text-xs font-bold text-slate-500 mb-2">🗂️ 견적 정보</div>
+      <div class="text-sm space-y-1">
+        <div>견적 유형: <b>${quote.type || '-'}</b></div>
+        <div>주요 용도: <b>${useNames[useType] || '-'}</b></div>
+        ${note ? `<div>참고사항: <b>${note}</b></div>` : ''}
+        ${warnings}
+        <div class="text-xs text-slate-400 mt-2">※ 가격은 시세에 따라 변동될 수 있습니다.</div>
+      </div>
+    </div>`;
+}
+
+// ── 차트 렌더링 ───────────────────────────────────────
+function renderChart(parts) {
+  const ctx = document.getElementById('budgetChart').getContext('2d');
+  if (budgetChartInstance) budgetChartInstance.destroy();
+  const colors = ['#e8440a','#f97316','#f59e0b','#84cc16','#22c55e','#06b6d4','#6366f1','#a855f7','#ec4899'];
+  const isDark  = document.documentElement.classList.contains('dark');
+
+  budgetChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: parts.map(p => p.label),
+      datasets: [{ data: parts.map(p => p.price), backgroundColor: colors,
+                   borderWidth:2, borderColor: isDark ? '#1f2937' : '#fff' }]
+    },
+    options: {
+      responsive:true,
+      plugins: {
+        legend: { display:false },
+        tooltip: {
+          callbacks: {
+            label: c => ` ${c.raw.toLocaleString()}원 (${(c.raw / parts.reduce((s,p)=>s+p.price,0)*100).toFixed(1)}%)`
+          }
+        }
+      },
+      cutout:'60%'
+    }
+  });
+
+  document.getElementById('chartLegend').innerHTML = parts.map((p,i) => `
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <div class="w-3 h-3 rounded-sm shrink-0" style="background:${colors[i]}"></div>
+        <span class="text-xs text-slate-400 text-slate-300">${p.icon} ${p.label}</span>
+      </div>
+      <span class="text-xs font-bold text-gray-700 text-slate-200">${p.price.toLocaleString()}원</span>
+    </div>`).join('');
+}
+
+// ── 탭 전환 ──────────────────────────────────────────
+function switchTab(name, btn) {
+  ['parts','chart','summary'].forEach(t => document.getElementById('tab-'+t).classList.add('hidden'));
+  document.getElementById('tab-'+name).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active','text-brand'));
+  btn.classList.add('active');
+}
+
+// ── 견적 복사 ────────────────────────────────────────
+function copyEstimate() {
+  const quote = allQuotes[selectedQuoteIdx];
+  if (!quote) return;
+  let lines = [`[${quote.type || '견적'}]`];
+  Object.entries(PART_CONFIG).forEach(([cat, meta]) => {
+    const part = quote[cat];
+    if (part?.name) lines.push(`[${meta.label}] ${part.name} - ${part.price}`);
+  });
+  lines.push('─'.repeat(30));
+  lines.push(`합계: ${parsePrice(quote.total_price).toLocaleString()}원`);
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    Swal.fire({ icon:'success', title:'복사 완료!', text:'클립보드에 복사되었습니다.',
+      timer:1500, showConfirmButton:false, confirmButtonColor:'#e8440a' });
+  });
+}
+</script>
+</body>
+</html>
